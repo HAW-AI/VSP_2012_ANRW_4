@@ -6,8 +6,7 @@
 %% |___ | | | |  _  |  _ <  | |
 %% |____/ |_| |_| |_|_| |_| |_|
 
-
-start(Ip,Port)->
+start(Socket,Ip,Port)->
 	Socket=tools:get_socket(receiver,Port,Ip),
 	gen_udp:controlling_process(Socket,self()),
 	werkzeug:logging("mysenderlog.log",erl_format("SendSocket running on: ~p~n",[SendPort])),
