@@ -1,5 +1,5 @@
 -module(sender).
--export([start/4]).
+-export([start/4,newPacket/2]).
 
 %%  ____ _____  ___  _____ _____
 %% / ___|_   _|/ _ \|  _  \_   _|
@@ -8,6 +8,7 @@
 
 start(Ip,Port,MultiIp,ReceiverPort)->
 	Socket=tools:get_socket(sender,Port,Ip),
+	gen_udp:controlling_process(Socket,self()),
 	werkzeug:logging("mysenderlog.log",lists:concat(["SendSocket running on: ",Port,"\n"])),
     Dataqueue = spawn(fun()->dataqueue:start() end),
     loop(Dataqueue,Socket,MultiIp,ReceiverPort).
@@ -28,23 +29,17 @@ loop(Dataqueue,Socket,Ip,Port)->
                 
                 %% receive data from dataqueue
                 {input,{value,Input}} ->
-                    
                     %% wait in realtime for the next slot
                     waitForSlot(NextSlot),
-                    
                     %% create a new packet
                     Packet = newPacket(Input,NextSlot),
-                    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] ready to send: ",binary_to_list(Packet),"\n"])),
-                    
+                    io:format("[sender] ready to send: ~p~n",[Packet]),
                     %% send packet with socket to ip:port
                     gen_udp:send(Socket,Ip,Port,Packet),
-                    
                     %% repeat
                     loop(Dataqueue,Socket,Ip,Port);
-                
                 %% if data is empty
                 {input,empty} ->
-                    
                     %% repeat
                     loop(Dataqueue,Socket,Ip,Port)
             end
@@ -71,7 +66,7 @@ waitForSlot(Slot)->
     %% is the result nagativ their is no time to wait!
     case SlotTime-(CurrentTime rem 1000) of
         TimeToWait when (TimeToWait>0)->
-            werkzeug:logging("mysenderlog.log", lists:concat(["[sender] time to wait: ",TimeToWait,"~n"])),
+            werkzeug:logging("mysenderlog.log", lists:concat(["[sender] time to wait: ",TimeToWait,"\n"])),
             timer:sleep(TimeToWait);
         _TimeToWait->
             werkzeug:logging("mysenderlog.log", "[sender] no time to wait\n"),

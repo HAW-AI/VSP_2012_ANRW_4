@@ -8,7 +8,8 @@ start([TeamNo,StationNo,MulticastIp,LocalIp])->
 start(TeamNo,StationNo,MulticastIp,LocalIp)->
 	ReceivePort=15000+TeamNo,
     SendPort=14000+TeamNo,
-	Receiver=spawn(fun()->receiver:start(self(),LocalIp,MulticastIp,ReceivePort) end),
+	Station=self(),
+	Receiver=spawn(fun()->receiver:start(Station,LocalIp,MulticastIp,ReceivePort) end),
 	Sender=spawn(fun()->sender:start(LocalIp,SendPort,MulticastIp,ReceivePort) end),
 	wait_for_full_second(),
 	{ok, SlotTimer}=timer:send_interval(1000,  self(), calculate_slot),
@@ -22,12 +23,12 @@ loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishes,Reset)->
 			Sender ! {slot,NewSlot},
 			loop(StationNo,Sender,Receiver,SlotTimer,NewSlot,[],dict:new(),false);
 		{received,SenderSlot,Time,Packet} ->
-			werkzeug:logging("mylog.log", lists:concat(["coordinator: Received: slot:",SenderSlot,";time: ", Time,";packet: ",tools:message_to_string(Packet),"\n"])),
+			werkzeug:logging("mylog.log", lists:concat(["station: Received: slot:",SenderSlot,"; time: ", Time,"; packet: ",lists:concat(tools:message_to_string(Packet)),"\n"])),
 			SlotWishesNew = update_slot_wishes(Packet, SlotWishes),
 			HasColl = has_collision(SenderSlot,UsedSlots,Slot),
 			if	
 				HasColl ->
-					werkzeug:logging("mylog.log", lists:concat(["coordinator: Collision detected in Slot ",SenderSlot,"\n"])),
+					werkzeug:logging("mylog.log", lists:concat(["station: Collision detected in Slot ",SenderSlot,"\n"])),
 					if	SenderSlot == Slot -> %%Collision with own slot, use a new slot.
 							SlotWishesWithOwn = dict:append(SenderSlot, StationNo, SlotWishesNew),	
 							loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishesWithOwn,true);
@@ -43,7 +44,7 @@ loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishes,Reset)->
 			Sender ! kill,
 			Receiver ! kill,
 			timer:cancel(SlotTimer);
-		Any -> io:format("coordinator: Received garbage: ~p~n",[Any]),
+		Any -> io:format("station: Received garbage: ~n"),
 			loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishes,Reset)
 	end.
 %% wait for first slot / first full second
@@ -63,6 +64,6 @@ has_collision(Slot,UsedSlots,CurrentSlot) ->
 	((lists:member(Slot, UsedSlots)) or (Slot == CurrentSlot)).
 
 update_slot_wishes(Packet,SlotWishes) ->
-    {Station,Slot,_,_} = utilities:match_message(Packet),
+    {Station,Slot,_,_} = tools:match_message(Packet),
 	%% Appends the Clients to each SlotWish, so we can choose free slots afterwards
     dict:append(Slot,Station,SlotWishes).
