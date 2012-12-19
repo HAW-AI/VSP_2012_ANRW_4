@@ -1,16 +1,16 @@
 -module(sender).
--export([start/2]).
+-export([start/4]).
 
 %%  ____ _____  ___  _____ _____
 %% / ___|_   _|/ _ \|  _  \_   _|
 %% |___ | | | |  _  |  _ <  | |
 %% |____/ |_| |_| |_|_| |_| |_|
 
-start(Ip,Port)->
+start(Ip,Port,MultiIp,ReceiverPort)->
 	Socket=tools:get_socket(sender,Port,Ip),
 	werkzeug:logging("mysenderlog.log",lists:concat(["SendSocket running on: ",Port,"\n"])),
     Dataqueue = spawn(fun()->dataqueue:start() end),
-    loop(Dataqueue,Socket,Ip,Port).
+    loop(Dataqueue,Socket,MultiIp,ReceiverPort).
 
 %%  _     _____ _____ ____
 %% | |   |  _  |  _  |  _ \
