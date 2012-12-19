@@ -32,9 +32,11 @@ getStationConfigData() ->
 %%{active, true} => If the value is true, which is the default, everything received from the socket will be sent as messages to the receiving process.
 %%{ip, IP} => If the host has several network interfaces, this option specifies which one to use.
 get_socket(sender,Port,IP)->
-	gen_udp:open(Port, [binary, {active, true}, {ip, IP}, inet, {multicast_loop, false}, {multicast_if, IP}]).
+	{ok,Socket}=gen_udp:open(Port, [binary, {active, true}, {ip, IP}, inet, {multicast_loop, false}, {multicast_if, IP}]),
+	Socket.
 get_socket(receiver,Port,IP,MultIP)->
-	gen_udp:open(Port, [binary, {active, true}, {multicast_if, IP}, inet, {multicast_loop, false}, {add_membership, {MultIP,IP}}]).
+	{ok,Socket}=gen_udp:open(Port, [binary, {active, true}, {multicast_if, IP}, inet, {multicast_loop, false}, {add_membership, {MultIP,IP}}]),
+	Socket.
 
 match_message(_Packet= <<_Rest:8/binary,StationBin:2/binary,NutzdatenBin:14/binary,SlotBin:8/integer,TimestampBin:64/integer>>)	->
 	Station=list_to_integer(binary_to_list(StationBin)),
