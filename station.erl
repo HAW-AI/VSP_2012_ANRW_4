@@ -8,7 +8,7 @@ start([TeamNo,StationNo,MulticastIp,LocalIp])->
 start(TeamNo,StationNo,MulticastIp,LocalIp)->
 	ReceivePort=15000+TeamNo,
     SendPort=14000+TeamNo,
-	Receiver=spawn(reseiver:start(self(),LocalIp,MulticastIp,ReceivePort)),
+	Receiver=spawn(receiver:start(self(),LocalIp,MulticastIp,ReceivePort)),
 	Sender=spawn(sender:start(LocalIp,SendPort)),
 	wait_for_full_second(),
 	{ok, SlotTimer}=timer:send_interval(1000,  self(), calculate_slot),

@@ -8,7 +8,6 @@
 
 start(Socket,Ip,Port)->
 	Socket=tools:get_socket(receiver,Port,Ip),
-	gen_udp:controlling_process(Socket,self()),
 	werkzeug:logging("mysenderlog.log",lists:concat(["SendSocket running on: ",Port,"\n"])),
     Dataqueue = spawn(fun()->dataqueue:start() end),
     loop(Dataqueue,Socket,Ip,Port).
