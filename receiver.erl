@@ -8,7 +8,7 @@
 
 start(Station,Socket)->
 
-    %% get the current frame
+    %% get the current system second as frame
     CurrentFrame=tools:getCurrentFrame(),
 
     %% assign process which receives messages to socket
@@ -24,11 +24,20 @@ start(Station,Socket)->
 
 loop(Station,Socket,LastFrame)->
     receive
-        {udp, Socket, IP, Port, Packet} -> 
+        {udp,Socket,IP,Port,Packet}->
+
+            %% get the current system second as frame
             CurrentFrame=tools:getCurrentFrame(),
+            
+            %% get the current system time in milliseconds
             Time=tools:getTimestamp(),
+            
+            %% get the current slot for the system time
             Slot=tools:getSlotForMsec(Time),
+
+            %% inform the station of the incoming message
             Station ! {received,Slot,Time,Packet},
+            
             loop(Station,Socket,CurrentFrame);
         kill -> 
             io:format("kill"),
