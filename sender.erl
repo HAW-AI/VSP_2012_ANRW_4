@@ -34,7 +34,7 @@ loop(Dataqueue,Socket,Ip,Port)->
                     
                     %% create a new packet
                     Packet = newPacket(Input,NextSlot),
-                    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] ready to send: ",Packet,"\n"])),
+                    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] ready to send: ",binary_to_list(Packet),"\n"])),
                     
                     %% send packet with socket to ip:port
                     gen_udp:send(Socket,Ip,Port,Packet),
