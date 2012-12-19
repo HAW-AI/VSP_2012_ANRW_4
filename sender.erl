@@ -9,7 +9,7 @@
 start(Socket,Ip,Port)->
 	Socket=tools:get_socket(receiver,Port,Ip),
 	gen_udp:controlling_process(Socket,self()),
-	werkzeug:logging("mysenderlog.log",erl_format("SendSocket running on: ~p~n",[SendPort])),
+	werkzeug:logging("mysenderlog.log",lists:concat(["SendSocket running on: ",Port,"\n"])),
     Dataqueue = spawn(fun()->dataqueue:start() end),
     loop(Dataqueue,Socket,Ip,Port).
 
@@ -23,7 +23,7 @@ loop(Dataqueue,Socket,Ip,Port)->
     
         %% receive next slot from station
         {slot,NextSlot}->
-            io:format("[sender] next slot: ~p~n",[NextSlot]),
+            werkzeug:logging("mysenderlog.log", lists:concat(["[sender] next slot: ",NextSlot,"\n"])),
             Dataqueue ! {get_data,self()},
             receive
                 
@@ -35,7 +35,7 @@ loop(Dataqueue,Socket,Ip,Port)->
                     
                     %% create a new packet
                     Packet = newPacket(Input,NextSlot),
-                    io:format("[sender] ready to send: ~p~n",[Packet]),
+                    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] ready to send: ",Packet,"\n"])),
                     
                     %% send packet with socket to ip:port
                     gen_udp:send(Socket,Ip,Port,Packet),
@@ -63,8 +63,8 @@ waitForSlot(Slot)->
     
     %% get the current system time in milliseconds
     CurrentTime=tools:getTimestamp(),
-    io:format("[sender] next slot time: ~p~n",[SlotTime]),
-    io:format("[sender] current time: ~p~n",[CurrentTime]),
+    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] next slot time: ",SlotTime,"\n"])),
+    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] current time: ",CurrentTime,"\n"])),
     
     %% wait for the next slottime
     %% get the rest of the actual second and substract in from the slottime
@@ -72,9 +72,9 @@ waitForSlot(Slot)->
     %% is the result nagativ their is no time to wait!
     case SlotTime-(CurrentTime rem 1000) of
         TimeToWait when (TimeToWait>0)->
-            io:format("[sender] time to wait: ~p~n",[TimeToWait]),
+            werkzeug:logging("mysenderlog.log", lists:concat(["[sender] time to wait: ",TimeToWait,"~n"])),
             timer:sleep(TimeToWait);
         _TimeToWait->
-            io:format("[sender] no time to wait~n"),
+            werkzeug:logging("mysenderlog.log", "[sender] no time to wait\n"),
             ok
     end.

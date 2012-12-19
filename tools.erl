@@ -4,7 +4,7 @@
 
 %% the current frame is the current second
 getCurrentFrame()->
-	{_,Secs,_}=>now(),
+	{_,Secs,_}=now(),
 	Secs.
 
 %% the current time in milliseconds as timestamp
@@ -32,9 +32,9 @@ getStationConfigData() ->
 %%{active, true} => If the value is true, which is the default, everything received from the socket will be sent as messages to the receiving process.
 %%{ip, IP} => If the host has several network interfaces, this option specifies which one to use.
 get_socket(sender,Port,IP)->
-	{ok,Socket}=gen_udp:open(Port, [binary, {active, true}, {ip, IP}, inet, {multicast_loop, false}, {multicast_if, IP}]),
+	gen_udp:open(Port, [binary, {active, true}, {ip, IP}, inet, {multicast_loop, false}, {multicast_if, IP}]).
 get_socket(receiver,Port,IP,MultIP)->
-	{ok,ReceiveSocket}=gen_udp:open(Port, [binary, {active, true}, {multicast_if, IP}, inet, {multicast_loop, false}, {add_membership, {MultIP,IP}}]),
+	gen_udp:open(Port, [binary, {active, true}, {multicast_if, IP}, inet, {multicast_loop, false}, {add_membership, {MultIP,IP}}]).
 
 match_message(_Packet= <<_Rest:8/binary,StationBin:2/binary,NutzdatenBin:14/binary,SlotBin:8/integer,TimestampBin:64/integer>>)	->
 	Station=list_to_integer(binary_to_list(StationBin)),

@@ -1,5 +1,5 @@
 -module(receiver).
--export([start/2]).
+-export([start/4]).
 
 %%  ____ _____  ___  _____ _____
 %% / ___|_   _|/ _ \|  _  \_   _|
@@ -11,39 +11,31 @@ start(Station,Ip,MultIp,Port)->
 	Socket=tools:get_socket(receiver,Port,Ip,MultIp),
 	%% assign process which receives messages to socket
 	gen_udp:controlling_process(Socket,self()),
-	werkzeug:logging("mysenderlog.log",erl_format("ReceiveSocket running on: ~p~n",[ReceivePort])),
-    %% get the current frame
-    CurrentFrame=tools:getCurrentFrame(),
+	werkzeug:logging("myreceiverlog.log",lists:concat(["ReceiveSocket running on: ",Port,"~n"])),
 
     %% start receive loop
-    loop(Station,Socket,CurrentFrame).
+    loop(Station,Socket).
 
 %%  _     _____ _____ ____
 %% | |   |  _  |  _  |  _ \
 %% | |___| |_| | |_| |  __/
 %% |_____|_____|_____|_|
 
-loop(Station,Socket,LastFrame)->
+loop(Station,Socket)->
     receive
-        {udp,Socket,IP,Port,Packet}->
-
-            %% get the current system second as frame
-            CurrentFrame=tools:getCurrentFrame(),
-            
+        {udp,_Socket,_IP,_Port,Packet}->
             %% get the current system time in milliseconds
-            Time=tools:getTimestamp(),
-            
+            Time=tools:getTimestamp(),          
             %% get the current slot for the system time
             Slot=tools:getSlotForMsec(Time),
-
             %% inform the station of the incoming message
             Station ! {received,Slot,Time,Packet},
             
-            loop(Station,Socket,CurrentFrame);
+            loop(Station,Socket);
         kill -> 
-            io:format("kill"),
+            werkzeug:logging("myreceiverlog.log","kill"),
             gen_udp:close(Socket),
             exit(normal);
         Any ->
-            io:format("any: ~p~n",[Any])
+            iwerkzeug:logging("myreceiverlog.log",lists:concat(["any: ",Any,"~n"]))
     end.
