@@ -7,7 +7,7 @@
 %% |____/ |_| |_| |_|_| |_| |_|
 
 start(Ip,Port)->
-	Socket=tools:get_socket(receiver,Port,Ip),
+	Socket=tools:get_socket(sender,Port,Ip),
 	werkzeug:logging("mysenderlog.log",lists:concat(["SendSocket running on: ",Port,"\n"])),
     Dataqueue = spawn(fun()->dataqueue:start() end),
     loop(Dataqueue,Socket,Ip,Port).
