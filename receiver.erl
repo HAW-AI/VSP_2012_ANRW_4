@@ -11,7 +11,7 @@ start(Station,Ip,MultIp,Port)->
 	Socket=tools:get_socket(receiver,Port,Ip,MultIp),
 	%% assign process which receives messages to socket
 	gen_udp:controlling_process(Socket,self()),
-	werkzeug:logging("myreceiverlog.log",lists:concat(["ReceiveSocket running on: ",Port,"\n"])),
+	io:format("ReceiveSocket running on: ~p~n",[Port]),
 	%% start receive loop
     loop(Station,Socket).
 
@@ -31,9 +31,9 @@ loop(Station,Socket)->
             Station ! {received,Slot,Time,Packet},
             loop(Station,Socket);
         kill -> 
-            werkzeug:logging("myreceiverlog.log","kill"),
+            io:format("kill"),
             gen_udp:close(Socket),
             exit(normal);
         Any ->
-            werkzeug:logging("myreceiverlog.log","Received garbage \n")
+            io:format("Received garbage ~n")
     end.

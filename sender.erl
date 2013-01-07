@@ -1,29 +1,29 @@
 -module(sender).
--export([start/4,newPacket/2]).
+-export([start/5,newPacket/2]).
 
 %%  ____ _____  ___  _____ _____
 %% / ___|_   _|/ _ \|  _  \_   _|
 %% |___ | | | |  _  |  _ <  | |
 %% |____/ |_| |_| |_|_| |_| |_|
 
-start(Ip,Port,MultiIp,ReceiverPort)->
+start(Station,Ip,Port,MultiIp,ReceiverPort)->
 	Socket=tools:get_socket(sender,Port,Ip),
 	gen_udp:controlling_process(Socket,self()),
-	werkzeug:logging("mysenderlog.log",lists:concat(["SendSocket running on: ",Port,"\n"])),
+	io:format("SendSocket running on: ~p~n",[Port]),
     Dataqueue = spawn(fun()->dataqueue:start() end),
-    loop(Dataqueue,Socket,MultiIp,ReceiverPort).
+    loop(Station,Dataqueue,Socket,MultiIp,ReceiverPort).
 
 %%  _     _____ _____ ____
 %% | |   |  _  |  _  |  _ \
 %% | |___| |_| | |_| |  __/
 %% |_____|_____|_____|_|
 
-loop(Dataqueue,Socket,Ip,Port)->
+loop(Station,Dataqueue,Socket,Ip,Port)->
     receive
     
         %% receive next slot from station
         {slot,NextSlot}->
-            werkzeug:logging("mysenderlog.log", lists:concat(["[sender] next slot: ",NextSlot,"\n"])),
+            io:format("[sender] next slot: ~p~n",[NextSlot]),
             Dataqueue ! {get_data,self()},
             receive
                 
@@ -31,17 +31,26 @@ loop(Dataqueue,Socket,Ip,Port)->
                 {input,{value,Input}} ->
                     %% wait in realtime for the next slot
                     waitForSlot(NextSlot),
-                    %% create a new packet
-                    Packet = newPacket(Input,NextSlot),
-                    io:format("[sender] ready to send: ~p~n",[Packet]),
-                    %% send packet with socket to ip:port
-                    gen_udp:send(Socket,Ip,Port,Packet),
+                    
+                    
+                    Station ! {get_slot, NextSlot},
+                    receive
+                        {new_slot,Slot} ->
+                            io:format("[sender] valid slot: ~p~n",[Slot]),
+                            %% create a new packet
+                            Packet = newPacket(Input,Slot),
+                            io:format("[sender] ready to send: ~p~n",[Packet]),
+                            %% send packet with socket to ip:port
+                            gen_udp:send(Socket,Ip,Port,Packet)
+                    end,
+
+
                     %% repeat
-                    loop(Dataqueue,Socket,Ip,Port);
+                    loop(Station,Dataqueue,Socket,Ip,Port);
                 %% if data is empty
                 {input,empty} ->
                     %% repeat
-                    loop(Dataqueue,Socket,Ip,Port)
+                    loop(Station,Dataqueue,Socket,Ip,Port)
             end
 	end.
 
@@ -57,8 +66,8 @@ waitForSlot(Slot)->
     
     %% get the current system time in milliseconds
     CurrentTime=tools:getTimestamp(),
-    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] next slot time: ",SlotTime,"\n"])),
-    werkzeug:logging("mysenderlog.log", lists:concat(["[sender] current time: ",CurrentTime,"\n"])),
+    io:format("[sender] next slot time: ~p~n",[SlotTime]),
+    io:format("[sender] current time: ~p~n",[CurrentTime]),
     
     %% wait for the next slottime
     %% get the rest of the actual second and substract in from the slottime
@@ -66,9 +75,9 @@ waitForSlot(Slot)->
     %% is the result nagativ their is no time to wait!
     case SlotTime-(CurrentTime rem 1000) of
         TimeToWait when (TimeToWait>0)->
-            werkzeug:logging("mysenderlog.log", lists:concat(["[sender] time to wait: ",TimeToWait,"\n"])),
+            io:format("[sender] time to wait: ~p~n",[TimeToWait]),
             timer:sleep(TimeToWait);
         _TimeToWait->
-            werkzeug:logging("mysenderlog.log", "[sender] no time to wait\n"),
+            io:format("[sender] no time to wait~n"),
             ok
     end.
