@@ -1,76 +1,57 @@
 -module(station).
 -export([start/1]).
 
-start([Port,TeamNo,StationNo,MulticastIp,LocalIp])->
+start([Port,StationNo,MulticastIp,LocalIp])->
     {ok,MulticastIpTuple}=inet_parse:address(atom_to_list(MulticastIp)),
     {ok,LocalIpTuple}=inet_parse:address(atom_to_list(LocalIp)),
-    start(list_to_integer(atom_to_list(Port)),list_to_integer(atom_to_list(TeamNo)),list_to_integer(atom_to_list(StationNo)),MulticastIpTuple,LocalIpTuple).
-start(Port,TeamNo,StationNo,MulticastIp,LocalIp)->
+    start(list_to_integer(atom_to_list(Port)),list_to_integer(atom_to_list(StationNo)),MulticastIpTuple,LocalIpTuple).
+start(Port,StationNo,MulticastIp,LocalIp)->
 	ReceivePort=Port,
-    SendPort=14000+TeamNo,
+        SendPort=14000+StationNo,
 	Station=self(),
 	Receiver=spawn(fun()->receiver:start(Station,LocalIp,MulticastIp,ReceivePort) end),
-	Sender=spawn(fun()->sender:start(Station,LocalIp,SendPort,MulticastIp,ReceivePort) end),
 	wait_for_full_second(),
-	{ok, SlotTimer}=timer:send_interval(1000,  self(), calculate_slot),
+	{ok, SlotTimer}=timer:send_interval(1000,  self(), frame_start),
 	{Slot,_}=(random:uniform_s(20,now())),
-	loop(StationNo,Sender,Receiver,SlotTimer,Slot-1,[],dict:new(),true).
+	Sender=spawn(fun()->sender:start(Station,LocalIp,SendPort,MulticastIp,ReceivePort,Slot-1) end),
+	loop(StationNo,Sender,Receiver,SlotTimer,dict:new()).
+
 %%on timer error
-loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishes,Reset)->
+loop(StationNo,Sender,Receiver,SlotTimer,SlotWishes)->
 	receive 
-		calculate_slot -> %%If reset, use new slot, else use current slot.
-			NewSlot = get_slot(Slot,SlotWishes,Reset),
-            Sender ! {slot,NewSlot},
-            loop(StationNo,Sender,Receiver,SlotTimer,NewSlot,[],dict:new(),false);
+		frame_start -> %%If reset, use new slot, else use current slot.
+            io:format("--- New Frame ---~n"),
+            Sender ! send,
+			loop(StationNo,Sender,Receiver,SlotTimer,dict:new());
 
+        {get_slot,CurrentSlot} ->
+			io:format("[station] calculate next slot ~n"),
+			Slot = get_slot(SlotWishes,CurrentSlot),
+			Sender ! {next_slot,Slot},
+			loop(StationNo,Sender,Receiver,SlotTimer,SlotWishes);
 
-        {get_slot, Slot} ->
-            IsValid = not dict:is_key(Slot, SlotWishes),
-            NewSlot = get_slot(Slot,SlotWishes,IsValid),
-            Sender ! {new_slot,NewSlot},
-            loop(StationNo,Sender,Receiver,SlotTimer,NewSlot,[],dict:new(),false);
-
-
-        {received,SenderSlot,Time,Packet} ->
+		{received,SenderSlot,Time,Packet} ->
 			io:format("station: Received: slot: ~p; time: ~p; packet: ~p~n",[SenderSlot,Time,tools:message_to_string(Packet)]),
 			SlotWishesNew = update_slot_wishes(Packet, SlotWishes),
-			HasColl = has_collision(SenderSlot,UsedSlots,Slot),
-			if	
-				HasColl ->
-					io:format("station: Collision detected in Slot ~p~n",[SenderSlot]),
-					if	SenderSlot == Slot -> %%Collision with own slot, use a new slot.
-							SlotWishesWithOwn = dict:append(SenderSlot, StationNo, SlotWishesNew),	
-							loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishesWithOwn,true);
-						true -> %%Collision with another slot, just ignore.
-							loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishesNew,false)
-					end;
-				true -> %%All is well
-					SlotWishesNew=update_slot_wishes(Packet,SlotWishes),
-					UsedSlotsNew = lists:append([Slot], UsedSlots),
-					loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlotsNew,SlotWishesNew,Reset)
-			end;			
+			loop(StationNo,Sender,Receiver,SlotTimer,SlotWishesNew);
 		kill ->
 			Sender ! kill,
 			Receiver ! kill,
 			timer:cancel(SlotTimer);
-		Any -> io:format("station: Received garbage: ~n"),
-			loop(StationNo,Sender,Receiver,SlotTimer,Slot,UsedSlots,SlotWishes,Reset)
+		Any -> io:format("station: Received garbage: ~p~n",[Any]),
+			loop(StationNo,Sender,Receiver,SlotTimer,SlotWishes)
 	end.
 %% wait for first slot / first full second
 wait_for_full_second()->
 	timer:sleep(1000 - (tools:getTimestamp() rem 1000)). 
 
-get_slot(_,SlotWishes,true) ->
-	ValidSlotWishes = dict:filter(fun(_,V) -> (length(V) == 1) end, SlotWishes),		%%remove collisions
-	FreeSlots = lists:subtract(lists:seq(0,19), dict:fetch_keys(ValidSlotWishes)),
+get_slot(SlotWishes,CurrentSlot) ->
+	ValidSlotWishes = dict:filter(fun(_,V) -> not (lists:member(CurrentSlot,V) andalso length(V)==1) end, SlotWishes),		%%remove CurrentSlot
+	io:format("wish keys ~p~n",[dict:fetch_keys(ValidSlotWishes)]),
+	FreeSlots = lists:subtract(lists:seq(0,19), dict:fetch_keys(SlotWishes)),
 	{NthSlotList,_}=random:uniform_s(length(FreeSlots),now()),
 	io:format("Choosing Slot ~p from ~p~n", [NthSlotList,FreeSlots]),
-	lists:nth(NthSlotList, FreeSlots);
-
-get_slot(Slot,_,false) -> Slot.
-
-has_collision(Slot,UsedSlots,CurrentSlot) ->
-	((lists:member(Slot, UsedSlots)) or (Slot == CurrentSlot)).
+	lists:nth(NthSlotList, FreeSlots).
 
 update_slot_wishes(Packet,SlotWishes) ->
     {Station,Slot,_,_} = tools:match_message(Packet),

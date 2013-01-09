@@ -1,56 +1,54 @@
 -module(sender).
--export([start/5,newPacket/2]).
+-export([start/6,newPacket/2]).
 
 %%  ____ _____  ___  _____ _____
 %% / ___|_   _|/ _ \|  _  \_   _|
 %% |___ | | | |  _  |  _ <  | |
 %% |____/ |_| |_| |_|_| |_| |_|
 
-start(Station,Ip,Port,MultiIp,ReceiverPort)->
+start(Station,Ip,Port,MultiIp,ReceiverPort,Slot)->
 	Socket=tools:get_socket(sender,Port,Ip),
 	gen_udp:controlling_process(Socket,self()),
 	io:format("SendSocket running on: ~p~n",[Port]),
-    Dataqueue = spawn(fun()->dataqueue:start() end),
-    loop(Station,Dataqueue,Socket,MultiIp,ReceiverPort).
+	Dataqueue = spawn(fun()->dataqueue:start() end),
+	loop(Station,Dataqueue,Socket,MultiIp,ReceiverPort,Slot).
 
 %%  _     _____ _____ ____
 %% | |   |  _  |  _  |  _ \
 %% | |___| |_| | |_| |  __/
 %% |_____|_____|_____|_|
 
-loop(Station,Dataqueue,Socket,Ip,Port)->
+loop(Station,Dataqueue,Socket,Ip,Port,CurrentSlot)->
     receive
     
-        %% receive next slot from station
-        {slot,NextSlot}->
-            io:format("[sender] next slot: ~p~n",[NextSlot]),
+        %% receive new frame message
+        send ->
+            io:format("[sender] current slot: ~p~n",[CurrentSlot]),
             Dataqueue ! {get_data,self()},
             receive
                 
                 %% receive data from dataqueue
                 {input,{value,Input}} ->
                     %% wait in realtime for the next slot
-                    waitForSlot(NextSlot),
+                    waitForSlot(CurrentSlot),
                     
                     
-                    Station ! {get_slot, NextSlot},
+                    Station ! {get_slot,CurrentSlot},
                     receive
-                        {new_slot,Slot} ->
-                            io:format("[sender] valid slot: ~p~n",[Slot]),
+                        {next_slot,NextSlot} ->
+                            io:format("[sender] next slot: ~p~n",[NextSlot]),
                             %% create a new packet
-                            Packet = newPacket(Input,Slot),
+                            Packet = newPacket(Input,NextSlot),
                             io:format("[sender] ready to send: ~p~n",[Packet]),
                             %% send packet with socket to ip:port
-                            gen_udp:send(Socket,Ip,Port,Packet)
-                    end,
-
-
-                    %% repeat
-                    loop(Station,Dataqueue,Socket,Ip,Port);
+                            gen_udp:send(Socket,Ip,Port,Packet),
+			    %% repeat
+                    	    loop(Station,Dataqueue,Socket,Ip,Port,NextSlot)
+                    end;                    
                 %% if data is empty
                 {input,empty} ->
                     %% repeat
-                    loop(Station,Dataqueue,Socket,Ip,Port)
+                    loop(Station,Dataqueue,Socket,Ip,Port,CurrentSlot)
             end
 	end.
 
